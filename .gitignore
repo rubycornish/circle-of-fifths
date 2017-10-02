@@ -1,11 +1,12 @@
 *~
 .idea
-/.DS_Store
+.DS_Store
 /lib
 closure
 /core.js
 /coreadvanced.js
 /coresimple.js
+/resources/public/cljs/out
 /out
 /web/out
 /node/out
