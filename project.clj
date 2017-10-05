@@ -11,9 +11,9 @@
   :clean-targets ^{:protect false} [:target-path "out" "resources/public/cljs"]
   :cljsbuild {
               :builds [{:id "dev"             ; development configuration
-                        :source-paths ["src"] ; Paths to monitor for build
+                        :source-paths ["src/"] ; Paths to monitor for build
                         :figwheel true        ; Enable Figwheel
-                        :compiler {:main circle-of-fifths.core     ; your main namespace
+                        :compiler {:main "circle-of-fifths.core"                ; your main namespace
                                    :asset-path "cljs/out"                       ; Where load-dependent files will go, mind you this one is relative
                                    :output-to "resources/public/cljs/main.js"   ; Where the main file will be built
                                    :output-dir "resources/public/cljs/out"      ; Directory for temporary files
