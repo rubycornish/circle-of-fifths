@@ -19,17 +19,31 @@
   "Calculate the y coord of a point on a circle"
   (+ y (* r (q/sin (q/radians a)))))
 
+(defn square [x]
+  (* x x))
+
+(def sqrt (.-sqrt js/Math))
+(def asin (.-asin js/Math))
+(def round (.-round js/Math))
+
+(defn distance-from-center [x y px py]
+  "Calculate distance of point px py from x y"
+  (sqrt (+ (square (- px x)) (square (- py y)))))
 
 ;;;; Strings
 
-(def chromatic-notes (cycle ["A" "Bb" "B" "C" "Db" "D" "Eb" "E" "F" "Gb" "G" "Ab"]))
+(def chromatic-notes (cycle ["A" "Bb" "B" "C" "Db" "D" "Eb" "E" "F" "F#" "G" "Ab"]))
 
+;
 
 ;;;; Intervals
 
 (defn interval [semitones note]
   "Returns a note a number of semitones away from the given note going up the scale"
   (first (drop semitones (drop-while #(not= note %) chromatic-notes))))
+
+(defn min-second [n]
+  (interval 1 n))
 
 (defn maj-second [n]
   (interval 2 n))
@@ -40,11 +54,19 @@
 (defn fourth [n]
   (interval 5 n))
 
+(defn tritone [n]
+  (interval 6 n))
+
 (defn fifth [n]
   (interval 7 n))
 
 (defn octave [n]
   (interval 12 n))
+
+
+;;;; Structures
+
+(def ionian [0 1 2 3 4 5 11])
 
 
 ;; SETUP
@@ -56,9 +78,9 @@
   {:tonic "C"
    :x-center-of-circle (/ canvas-width 2)
    :y-center-of-circle (/ canvas-height 2)
-   :whole-circle-radius (/ (* canvas-height 0.9) 2)
-   :note-circle-radius (/ (* canvas-height 0.5) 2)
-   :major-scale-chords-radius (/ (* canvas-height 0.6) 2)})
+   :circle-radius (/ (* canvas-height 0.5) 2)
+   :additional-info "chords"
+   :structure ionian})
 
 ;; UPDATE
 
@@ -69,93 +91,131 @@
       (cond
         ()))))
 
-(defn mouse-click []
-  identity)
+(defn angle-of-click [x y mx my min-r max-r]
+  (let [r (distance-from-center x y mx my)]
+    (cond
+      (< r min-r) nil
+      (> r max-r) nil
+      :else (asin (/ (- y my) r)))))
 
+(defn work-out-interval [angle]
+  (- (/ (+ 90 angle) 30) 0.5)) ;;; TODO
+
+(defn mouse-click [state event]
+  (let [{tonic :tonic
+         x :x-center-of-circle
+         y :y-center-of-circle
+         r :circle-radius
+         info :additional-info
+         structure :structure} state
+        {mx :x
+         my :y} event
+        angle (angle-of-click x y mx my (* r 0.8) (* r 1.2))
+        interval (work-out-interval angle)]
+    (js/console.log angle)
+    state))
+
+;
 
 (defn update-state [state]
   "Updates everything"
   (let [{x :x-center-of-circle
          y :y-center-of-circle
-         whole-r :whole-circle-radius
-         note-r :note-circle-radius
-         major-scale-chords-r :major-scale-chords-radius} state]
+         r :circle-radius
+         info :additional-info
+         structure :structure} state]
     state))
 
 
 ;; DRAW
 
-(defn draw-arc [x y r beg-angle end-angle color]
-  "Draws an arc and two lines from x y"
-  (let [d (* 2 r)]
-    (apply q/fill color)
-    (q/arc x y d d (q/radians beg-angle) (q/radians end-angle))))
-
-(defn draw-radius [x y r a]
-  "Draws radius of circle"
-  (q/line x y (parametric-x x r a) (parametric-y y r a)))
 
 (defn draw-text [x y r a t]
-  "Draws some text on the circle"
+  "Draw some text on a circle x y r moved by angle a"
   (let [x (parametric-x x r a)
         y (parametric-y y r a)]
     (q/with-translation [x y]
-      (q/with-rotation [(q/radians (+ a 90))]
-        (q/text t 0 0)))))
+      (q/text t 0 0))))
 
-(defn draw-n-arcs [x y r n colors]
-  "Draws n arcs with given colors. Arcs start at the top of circle and offset by half the angle to make arc centered"
-  (let [angle (/ 360 n)
-        offset (/ angle 2)
-        beg-angles (range (- -90 offset) 271 angle)
-        end-angles (range (+ -90 offset) 271 angle)]
-    (dorun (map (partial draw-arc x y r) beg-angles end-angles colors))))
+(defn draw-dot [x y r a]
+  "Draw a dot on a circle x y r moved by angle a"
+  (let [x (parametric-x x r a)
+        y (parametric-y y r a)]
+    (q/ellipse x y 10 10)))
 
-(defn draw-n-radii [x y r n]
-  "Draws n radii"
-  (let [angle (/ 360 n)
-        offset (/ angle 2)
-        angles (range (- -90 offset) 271 angle)]
-    (dorun (map (partial draw-radius x y r) angles))))
+(defn draw-line [x y r a1 a2]
+  "Draw a line on a circle x y r between points at angles a1 and a2"
+  (let [x1 (parametric-x x r a1)
+        y1 (parametric-y y r a1)
+        x2 (parametric-x x r a2)
+        y2 (parametric-y y r a2)]
+    (q/line x1 y1 x2 y2)))
 
-(defn draw-text-in-arcs [x y r text text-size text-offset]
-  "Draws given text in arcs"
+(defn draw-triangle [x y r a1 a2 a3]
+  "Draw a line on a circle x y r between points at angles a1 and a2"
+  (let [x1 (parametric-x x r a1)
+        y1 (parametric-y y r a1)
+        x2 (parametric-x x r a2)
+        y2 (parametric-y y r a2)]
+    (q/triangle x1 y1 x2 y2 x y)))
+
+(defn draw-text-around-circle [x y r text text-size]
+  "Draw given text around a circle"
   (let [angle (/ 360 (count text))
-        offset (/ angle 2)
         angles (range -90 271 angle)]
-    (q/fill 0 0 0)
     (q/text-font "sans-serif" text-size)
     (q/text-align :center :center)
-    (dorun (map (partial draw-text x y (- r text-offset)) angles text))))
+    (dorun (map (partial draw-text x y r) angles text))))
 
-(defn draw-major-scale-chords [x y r]
-  "Draw the major chords for the key"
-  (let [chords ["I" "V" "ii" "vi" "iii" "vii°" "" "" "" "" "" "IV"]
-        colors [[153 255 204][153 255 204] ;MAJOR
-                [100 175 255][100 175 255][100 175 255] ;MINOR
-                [255 153 153]
-                [250 250 250][250 250 250][250 250 250][250 250 250][250 250 250] ;BLANK
-                [153 255 204]]] ;MAJOR AGAIN
-    (draw-n-arcs x y r 12 colors)
-    (draw-text-in-arcs x y r chords 30 20)))
+(defn draw-dots-around-circle [x y r n]
+  "Draw number of dots distributed around a circle."
+  (let [angle (/ 360 n)
+        angles (range -90 271 angle)]
+    (dorun (map (partial draw-dot x y r) angles))))
+
+(defn draw-lines-on-circle [x y r structure]
+  (let [beg-angles (map #(- (* 30 %) 90) structure) 
+        end-angles (map #(- (* 30 %) 90) (cons (peek structure) (pop structure)))]
+    (dorun (map (partial draw-line x y r) beg-angles end-angles))))
+
+(defn draw-triangles-on-circle [x y r structure]
+  (let [beg-angles (map #(- (* 30 %) 90) structure) 
+        end-angles (map #(- (* 30 %) 90) (cons (peek structure) (pop structure)))]
+    (dorun (map (partial draw-triangle x y r) beg-angles end-angles))))
 
 (defn draw-circle-of-fifths [x y r tonic]
   "Draw circle of fifths"
   (let [notes (take 12 (iterate fifth tonic))]
     (q/stroke-weight 2)
-    (draw-n-arcs x y r 12 (repeat 12 [250 250 250]))
-    (draw-text-in-arcs x y r notes 60 35)))
+    (q/fill 0 0 0)
+    (draw-dots-around-circle x y (* r 0.8) 12)
+    (draw-text-around-circle x y r notes 50)))
+
+(defn draw-major-chords [x y r]
+  (let [chords ["I" "V" "ii" "vi" "iii" "vii°" "" "" "" "" "" "IV"]]
+    (draw-text-around-circle x y r chords 30)))
+
+(defn draw-additional-info [x y r info]
+  (case info
+    "chords" (draw-major-chords x y r )))
+
+(defn draw-structure [x y r structure]
+    (q/fill 200 200 200)
+    (q/stroke 200 200 200)
+    (draw-triangles-on-circle x y (* r 0.8) structure)
+    (q/stroke 0 0 0)
+    (draw-lines-on-circle x y (* r 0.8) structure))
 
 (defn draw-state [state]
   "Draws everything"
   (let [{tonic :tonic
          x :x-center-of-circle
          y :y-center-of-circle
-         whole-r :whole-circle-radius
-         note-r :note-circle-radius
-         major-scale-chords-r :major-scale-chords-radius} state]
+         r :circle-radius
+         info :additional-info
+         structure :structure} state]
     (q/background 240)
-    (draw-major-scale-chords x y major-scale-chords-r)
-    (draw-circle-of-fifths x y note-r tonic)
-    (draw-n-radii x y whole-r 12)))
+    (draw-structure x y r structure)
+    (draw-circle-of-fifths x y r tonic)
+    (draw-additional-info x y (* r 1.25) info)))
 
